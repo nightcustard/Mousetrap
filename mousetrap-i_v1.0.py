@@ -179,13 +179,13 @@ class Mousetrap:
                 self.solenoid2.off()
 
                 if triggered_A and self.state_A == 0:
-                    print('beam A triggered')
+                    print('beam 1 triggered')
                     subject = f'beam 1 of {self.name} @ {self.ip} has tripped'
                     message = 'A 60 second count has started to detect further movement.'
                     sendmail(subject, message)
                     self.state_A = 1 # flag to indicate solenoid has fired
                 if triggered_B and self.state_B == 0:
-                    print('beam B triggered')
+                    print('beam 2 triggered')
                     subject = f'beam 2 of {self.name} @ {self.ip} has tripped'
                     message = 'A 60 second count has started to detect further movement.'
                     sendmail(subject, message)
