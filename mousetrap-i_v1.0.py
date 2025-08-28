@@ -82,7 +82,7 @@ def network_connect():
 def sendmail(subject, message):
     try:
         year, month, day, _, hour, mins, secs = RTC().datetime()[:7]
-        hour = hour + GMT_OFFSET # Set to local time
+        
         formatted_time = '{:02}/{:02}/{:02} {:02}:{:02}:{:02}'.format(day, month, year % 100, hour, mins, secs)
         smtp = umail.SMTP('smtp.gmail.com', 465, ssl=True)
         smtp.login(SENDER_EMAIL, SENDER_APP_PASSWORD)
