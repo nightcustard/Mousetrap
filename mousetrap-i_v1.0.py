@@ -28,6 +28,7 @@ SENDER_NAME = 'Sender name'
 SENDER_APP_PASSWORD = 'xxxx xxxx xxxx xxxx' # sender@gmail.com email account app password
 RECIPIENT_EMAIL = 'recipient@gmail.com' # probably your email address
 NTP_HOST = '0.pool.ntp.org' # Time server
+GMT_OFFSET = 1  # Timezone offset from GMT (eg) New York would be -5 in Summer and -4 in Winter 
 
 # Hardware shared by all traps (e.g., LED)
 led = Pin("LED", machine.Pin.OUT)
