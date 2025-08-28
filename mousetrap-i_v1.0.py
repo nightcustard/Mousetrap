@@ -275,7 +275,7 @@ if __name__ == '__main__':
             if toggle == 1: led.on()
             else: led.off()
         year, month, day, _, hour, mins, secs = RTC().datetime()[:7]
-		hour = hour + GMT_OFFSET # Set to local time
+        hour = hour + GMT_OFFSET # Set to local time
         trap_instance.send_status(hour, mins)
         trap_instance.update() # Increment loop counter, check battery voltage hourly, check sensors & check for post-trigger activity
         time.sleep(0.1)
