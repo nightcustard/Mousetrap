@@ -138,6 +138,7 @@ class Mousetrap:
         self.break_sensor2 = Pin(break_sensor2_pin, Pin.IN, Pin.PULL_UP)
         self.solenoid1 = Pin(solenoid1_pin, Pin.OUT, Pin.PULL_DOWN)
         self.solenoid2 = Pin(solenoid2_pin, Pin.OUT, Pin.PULL_DOWN)
+        self.battery = Pin(battery_pin, Pin.IN) # Turns the ADC input to high impedence
         self.battery_adc = ADC(battery_pin) # GP28 ADC 4.5v solenoid battery scaled by potential divider to circa 2.6v
         
         self.battery_voltage = 0 # default battery_voltage
