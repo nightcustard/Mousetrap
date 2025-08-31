@@ -15,6 +15,9 @@ VERSION = 'Mousetrap-I_v1.0' # update this as necessary
 # The trap_ID2 pin is connected to ground if the mousetrap is number 3 or 4, otherwise is left disconnected.
 # Daily status message sent at 12am (see 'status_hour' variable - 11 in summer time, 12 in winter time)
 # Daily reconnection with WiFi network added to reduce instances where the mousetrap stops responding on WiFi. 
+# Note re. battery voltage measurement: the first ADC reading varies between the hourly readings by over 300mV, causing erroneous 'low battery' warnings.
+# If the first measurement is followed by a short delay and then another measurement, this second measurement is accurate to within 10mV of the actual
+# battery voltage.  I am not certain why this happens but taking two measurements appears to work around this strange behaviour. 
 #----------------------------------------------------------------------
 
 import machine, umail, network, time, utime, ntptime, os
@@ -100,12 +103,12 @@ def sendmail(subject, message):
 # Get current time from internet
 def get_time():
     try:
-        ntptime.settime() # set RTC from NTP
-        year, month, day, dow, hour, mins, secs = RTC().datetime()[0:7]
-        hour = hour + GMT_OFFSET # Set to local time
-        f_time = '{:02}/{:02}/{:02} {:02}:{:02}:{:02}'.format(day, month, year % 100, hour, mins, secs)
+        ntptime.settime() # Get time from the internet and load it into the Pico's real time clock
+        year, month, day, dow, hour, mins, secs = RTC().datetime()[0:7] # Read the real time clock into year, month etc. variables
+        hour = hour + GMT_OFFSET # Change the hour variable to local time
+        f_time = '{:02}/{:02}/{:02} {:02}:{:02}:{:02}'.format(day, month, year % 100, hour, mins, secs) # Convert time into a more human friendly format 
     except:
-        print('Error syncing time, default values set')
+        print('Error syncing time, dummy values set')
         f_time = '{:02}/{:02}/{:02} {:02}:{:02}:{:02}'.format(1, 1, 2000 % 100, 0, 0, 0)
         year = 2000
     return(f_time, year)
@@ -153,17 +156,18 @@ class Mousetrap:
         print(f"{VERSION}: Starting {self.name} with battery calibration: {self.battery_cal} and loop cycles: {self.loop_cycles_1h}")
 
     def get_battery_voltage(self):
-        voltage = (self.battery_adc.read_u16() / 65535) * self.battery_cal
-        self.battery_voltage = round(voltage, 2)
-        if self.battery_voltage > 2.0:
+        voltage = (self.battery_adc.read_u16() / 65535) * self.battery_cal # First read of the battery voltage via the ADC - see note in 'about'.
+        time.sleep(1)
+        voltage = (self.battery_adc.read_u16() / 65535) * self.battery_cal # Final read of the battery voltage via the ADC
+        self.battery_voltage = round(voltage, 2) # Round the measurement to two places of decimals
+        if self.battery_voltage > 2.0: # Check if the solenoid batteries are fitted/switched on
             self.mode = 'mousetrap'
-            if self.battery_voltage < 4.3:
+            if self.battery_voltage < 4.3: # Check battery voltage isn't too low to reliably fire the solenoid. 4.3v may be a little conservative.
                 message = f'{self.name} solenoid battery voltage is {self.battery_voltage} volts. Consider replacement.'
                 subject = f'{self.name} @ {self.ip} battery message'
-                sendmail(subject, message)
+                sendmail(subject, message) # Send the battery level warning email.
         else:
-            self.mode = 'mouse-activity'
-
+            self.mode = 'mouse-activity' # If no batteries fitted or switched off, trap reverts to counting mice. 
 
     def check_sensors(self):
         triggered_A = self.break_sensor1.value() == 0 and self.state_A != 2 # True if beam of single trap is currently interrupted for the first time 
@@ -191,7 +195,7 @@ class Mousetrap:
                     message = 'A 60 second count has started to detect further movement.'
                     sendmail(subject, message)
                     self.state_B = 1
-            else: # mouse-activity mode
+            else: # mouse-activity mode - doesn't fire the solenoid, just increments the broken beam count variable.
                 self.trip_count += 1
                 time.sleep(1)
 
@@ -199,7 +203,6 @@ class Mousetrap:
         if (self.state_A == 1 or self.state_B == 1) and self.mode == 'mousetrap': # True if either beam sensor has been triggered. Only actioned once.
             if self.state_A == 1: self.state_A = 2 # Sets a flag to ensure this function and the solenoid firing are only actioned once.
             if self.state_B == 1: self.state_B = 2 # ditto for the other solenoid of dual traps
-
             led.off()
             break_count = 0
             time.sleep(1)
@@ -257,26 +260,26 @@ if __name__ == '__main__':
     
     ip = network_connect()
     
-    formatted_time, year = sync_ntp_time() # Synchronise RTC with NTP time (time is GMT); Returns a tuple.
+    formatted_time, year = sync_ntp_time() # Synchronise the Pico's real time clock with NTP time (time is GMT); Returns a tuple.
     if year == 'None':
         formatted_time, year = '00/00/00 00:00:00','0000'
 
-    trap_instance = Mousetrap(trap_id1, trap_id2, 15, 14, 16, 13, 28, ip)
+    trap_instance = Mousetrap(trap_id1, trap_id2, 15, 14, 16, 13, 28, ip) # Create the Mousetrap instance 
 
-    # Initial checks and email
-    trap_instance.get_battery_voltage()
-    subject = f'{trap_instance.name} @ {trap_instance.ip} startup message'
+    # Initial checks and start-up email
+    trap_instance.get_battery_voltage() # Measure the battery voltage
+    subject = f'{trap_instance.name} @ {trap_instance.ip} start-up message'
     message = f'{VERSION}: {trap_instance.name} has started in {trap_instance.mode} mode and is waiting for a mouse. Solenoid battery voltage is {trap_instance.battery_voltage} volts'
-    sendmail(subject, message)
+    sendmail(subject, message) # Send the email
     
-    while True:
+    while True: # Main programme loop
         # LED heartbeat - visual indication mousetrap is running
         if trap_instance.loop_cycles % 20 == 0: # True every 20 cycles (~ every two seconds)
             toggle = 1 - toggle
             if toggle == 1: led.on()
             else: led.off()
-        year, month, day, _, hour, mins, secs = RTC().datetime()[:7]
-        hour = hour + GMT_OFFSET # Set to local time
-        trap_instance.send_status(hour, mins)
+        year, month, day, _, hour, mins, secs = RTC().datetime()[:7] # Read the real time clock
+        hour = hour + GMT_OFFSET # Set the hour to local time
+        trap_instance.send_status(hour, mins) # Email the status of the trap
         trap_instance.update() # Increment loop counter, check battery voltage hourly, check sensors & check for post-trigger activity
         time.sleep(0.1)
